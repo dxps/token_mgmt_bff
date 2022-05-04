@@ -40,6 +40,17 @@ func respondNotFound(w http.ResponseWriter, r *http.Request) {
 	respondError(w, r, http.StatusNotFound, message)
 }
 
+func respondUnauthorized(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusUnauthorized)
+}
+
+func respondUnauthorizedWithError(w http.ResponseWriter, message interface{}) {
+	e := envelope{"error": message}
+	if err := writeJSON(w, http.StatusUnauthorized, e, nil); err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+	}
+}
+
 func respondForbidden(w http.ResponseWriter, r *http.Request, err error) {
 	respondError(w, r, http.StatusForbidden, err.Error())
 }
