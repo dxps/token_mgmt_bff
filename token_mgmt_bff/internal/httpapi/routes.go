@@ -3,35 +3,42 @@ package httpapi
 import (
 	"net/http"
 
-	"github.com/julienschmidt/httprouter"
-	"github.com/rs/cors"
+	corsHandlers "github.com/gorilla/handlers"
+	"github.com/gorilla/mux"
+	// "github.com/rs/cors"
 )
 
 const (
 	ACCOUNT_ID = "_accountID"
 )
 
+var (
+	CORS_ALLOWED_ORIGINS []string = []string{"http://localhost:9090"}
+	CORS_ALLOWED_HEADERS []string = []string{"Origin", "Authorization", "Content-Type"}
+	CORS_MAX_AGE         int      = 3600
+)
+
 func (a *API) routes() http.Handler {
 
-	router := httprouter.New()
-	router.NotFound = http.HandlerFunc(respondNotFound)
+	r := mux.NewRouter()
+	r.NotFoundHandler = http.HandlerFunc(respondNotFound)
 
-	router.HandlerFunc(http.MethodPost, "/authn", a.authnHandler)
+	r.HandleFunc("/authn", a.authnHandler)
 
-	router.Handle(http.MethodGet, "/accounts",
-		authzMiddleware(a.getAccountsHandler, a.authnMgr))
+	r.HandleFunc("/accounts", a.getAccountsHandler)
 
-	// router.HandlerFunc(http.MethodPost, "/transfer", a.transferHandler)
+	r.HandleFunc("/sse/stream", a.tokenStreamHandler)
 
-	// var freezePath = fmt.Sprintf("/accounts/:%s/freeze", ACCOUNT_ID)
-	// router.Handle(http.MethodPost, freezePath, a.freezeAccountHandler)
+	// handler := cors.New(cors.Options{
+	// 	AllowedOrigins: []string{"*"},
+	// 	AllowedMethods: []string{"GET", "POST", "DELETE", "PUT", "OPTIONS"},
+	// 	AllowedHeaders: []string{"Origin", "Authorization", "Content-Type"},
+	// }).Handler(r)
+	// return handler
 
-	// var unfreezePath = fmt.Sprintf("/accounts/:%s/unfreeze", ACCOUNT_ID)
-	// router.Handle(http.MethodPost, unfreezePath, a.unfreezeAccountHandler)
-
-	handler := cors.New(cors.Options{
-		AllowedOrigins: []string{"http://localhost:9090"},
-	}).Handler(router)
-
-	return handler
+	corsMaxAge := corsHandlers.MaxAge(CORS_MAX_AGE)
+	corsOrigins := corsHandlers.AllowedOrigins(CORS_ALLOWED_ORIGINS)
+	corsHeaders := corsHandlers.AllowedHeaders(CORS_ALLOWED_HEADERS)
+	corsHandler := corsHandlers.CORS(corsMaxAge, corsOrigins, corsHeaders)
+	return corsHandler(r)
 }

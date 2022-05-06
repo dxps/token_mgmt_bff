@@ -13,8 +13,9 @@ import (
 )
 
 type App struct {
-	httpAPI *httpapi.API
-	wg      *sync.WaitGroup
+	httpAPI  *httpapi.API
+	authnMgr *logic.AuthnMgr
+	wg       *sync.WaitGroup
 }
 
 func NewApp(httpPort int) (*App, error) {
@@ -23,12 +24,12 @@ func NewApp(httpPort int) (*App, error) {
 	clientsRepo := repo.NewClientsRepo()
 	tokenFactory := logic.NewTokenFactory(10)
 	authnMgr := logic.NewAuthnMgr(clientsRepo, tokenFactory)
-	authnMgr.StartCleanupJob()
 	accountsMgr := logic.NewAccountsMgr()
 	httpAPI := httpapi.NewAPI(httpPort, authnMgr, accountsMgr)
 	a := App{
-		httpAPI: httpAPI,
-		wg:      nil,
+		httpAPI:  httpAPI,
+		authnMgr: authnMgr,
+		wg:       nil,
 	}
 	return &a, nil
 }
@@ -42,6 +43,7 @@ func (a *App) Start(wg *sync.WaitGroup) error {
 		}
 	}()
 	a.wg.Add(1)
+	// a.authnMgr.StartCleanupJob()
 	return nil
 }
 
@@ -52,5 +54,6 @@ func (a *App) Stop(stopCtx context.Context) {
 	} else {
 		log.Info("API shutdown complete")
 	}
+	a.authnMgr.StopCleanupJob()
 	a.wg.Done()
 }

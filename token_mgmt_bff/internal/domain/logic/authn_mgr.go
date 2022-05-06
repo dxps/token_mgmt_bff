@@ -24,7 +24,7 @@ func NewAuthnMgr(clientsRepo *repo.ClientsRepo, tokenFactory *TokenFactory) *Aut
 		clientsRepo:   clientsRepo,
 		tokenFactory:  tokenFactory,
 		clientsTokens: map[string][]*model.Token{},
-		cleanupTicker: time.NewTicker(5 * time.Second),
+		cleanupTicker: time.NewTicker(10 * time.Second),
 	}
 }
 
@@ -39,7 +39,7 @@ func (am *AuthnMgr) Authenticate(client *model.Client) (*model.Token, error) {
 	}
 	tkn := am.tokenFactory.NewToken(client.ID)
 	am.clientsTokens[client.ID] = append(am.clientsTokens[client.ID], tkn)
-	log.Debugf("clientID '%s' got new token '%v'.", client.ID, tkn)
+	log.Debugf("clientID '%s' got token '%v'.", client.ID, tkn)
 	return tkn, nil
 }
 
@@ -55,9 +55,7 @@ func (am *AuthnMgr) ValidateToken(tokenValue string) error {
 		log.Debugf("There are no tokens for clientID '%s'.", tknParts[0])
 		return errs.ErrTokenInvalid
 	}
-	log.Debugf("Validating token '%v' against '%v' ...", tokenValue, tknParts[1])
 	for _, t := range clientTokens {
-		log.Debugf("Token '%v' is valid? %v", t, t.IsValid())
 		if t.Value == tokenValue {
 			if t.IsValid() {
 				return nil
@@ -69,9 +67,23 @@ func (am *AuthnMgr) ValidateToken(tokenValue string) error {
 	return errs.ErrTokenInvalid
 }
 
+func (am *AuthnMgr) RenewToken(currToken string) (*model.Token, error) {
+
+	tknParts := strings.Split(currToken, ":")
+	if len(tknParts) != 2 {
+		log.Debugf("Invalid value of token '%s'.", currToken)
+		return nil, errs.ErrTokenInvalid
+	}
+	clientID := tknParts[0]
+	tkn := am.tokenFactory.NewToken(clientID)
+	am.clientsTokens[clientID] = append(am.clientsTokens[clientID], tkn)
+	return tkn, nil
+}
+
 func (am *AuthnMgr) StartCleanupJob() {
 
 	go func() {
+		log.Debug("AuthnMgr CleanupJob started.")
 		for range am.cleanupTicker.C {
 			for c, ts := range am.clientsTokens {
 				for i, t := range ts {
@@ -87,6 +99,7 @@ func (am *AuthnMgr) StartCleanupJob() {
 				}
 			}
 		}
+		log.Debug("AuthnMgr Cleanup job stopped.")
 	}()
 }
 

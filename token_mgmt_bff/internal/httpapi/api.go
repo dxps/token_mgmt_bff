@@ -14,6 +14,7 @@ type API struct {
 	httpServer  *http.Server
 	authnMgr    *logic.AuthnMgr
 	accountsMgr *logic.AccountsMgr
+	keepRunning bool
 }
 
 func NewAPI(httpPort int, authnMgr *logic.AuthnMgr, accountsMgr *logic.AccountsMgr) *API {
@@ -36,10 +37,12 @@ func logError(r *http.Request, err error) {
 }
 
 func (a *API) Serve() error {
+	a.keepRunning = true
 	log.Printf("HTTP API listening on port %s", a.httpServer.Addr)
 	return a.httpServer.ListenAndServe()
 }
 
 func (a *API) Shutdown(stopCtx context.Context) error {
+	a.keepRunning = false
 	return a.httpServer.Shutdown(stopCtx)
 }
