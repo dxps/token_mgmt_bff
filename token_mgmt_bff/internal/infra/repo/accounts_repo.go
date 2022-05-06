@@ -27,7 +27,7 @@ func NewAccountsRepo() *AccountsRepo {
 
 func (r *AccountsRepo) GetAll() []*model.Account {
 
-	res := make([]*model.Account, 0)
+	res := []*model.Account{}
 	res = append(res, r.store...)
 	return res
 }

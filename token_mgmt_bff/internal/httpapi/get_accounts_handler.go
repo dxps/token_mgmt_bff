@@ -1,8 +1,12 @@
 package httpapi
 
-import "net/http"
+import (
+	"net/http"
 
-func (a *API) getAccountsHandler(w http.ResponseWriter, r *http.Request) {
+	"github.com/julienschmidt/httprouter"
+)
+
+func (a *API) getAccountsHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 
 	accounts := a.accountsMgr.GetAccounts()
 	respondOKwithJSON(w, r, accounts)

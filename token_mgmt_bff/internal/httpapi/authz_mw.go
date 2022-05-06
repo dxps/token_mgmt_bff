@@ -4,11 +4,12 @@ import (
 	"net/http"
 	"strings"
 
+	"dxps.io/token_mgmt_bff/internal/domain/logic"
 	"dxps.io/token_mgmt_bff/internal/errs"
 	"github.com/julienschmidt/httprouter"
 )
 
-func authzMiddleware(next httprouter.Handle) httprouter.Handle {
+func authzMiddleware(next httprouter.Handle, authnMgr *logic.AuthnMgr) httprouter.Handle {
 
 	return func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		ah := r.Header.Get(AUTHZ_HEADER)
@@ -18,14 +19,16 @@ func authzMiddleware(next httprouter.Handle) httprouter.Handle {
 		}
 		token := ah[7:]
 
-		if res := validateToken([]byte(token)); res != nil {
-			switch res {
+		if err := authnMgr.ValidateToken(token); err != nil {
+			switch err {
 			case errs.ErrTokenInvalid:
-				respondUnauthorized(w)
+				respondForbidden(w, r, errs.ErrTokenInvalid)
+				return
 			case errs.ErrTokenExpired:
-				respondUnauthorizedWithError(w, "token expired")
+				respondForbidden(w, r, errs.ErrTokenExpired)
+				return
 			}
-			return
+
 		}
 
 		// Call the registered handler.

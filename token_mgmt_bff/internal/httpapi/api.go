@@ -12,14 +12,16 @@ import (
 
 type API struct {
 	httpServer  *http.Server
+	authnMgr    *logic.AuthnMgr
 	accountsMgr *logic.AccountsMgr
 }
 
-func NewAPI(httpPort int, transferMgr *logic.AccountsMgr) *API {
+func NewAPI(httpPort int, authnMgr *logic.AuthnMgr, accountsMgr *logic.AccountsMgr) *API {
 
 	a := API{
 		httpServer:  nil, // Inited below.
-		accountsMgr: transferMgr,
+		authnMgr:    authnMgr,
+		accountsMgr: accountsMgr,
 	}
 	s := http.Server{
 		Addr:    fmt.Sprintf(":%d", httpPort),
@@ -34,12 +36,10 @@ func logError(r *http.Request, err error) {
 }
 
 func (a *API) Serve() error {
-
 	log.Printf("HTTP API listening on port %s", a.httpServer.Addr)
 	return a.httpServer.ListenAndServe()
 }
 
 func (a *API) Shutdown(stopCtx context.Context) error {
-
 	return a.httpServer.Shutdown(stopCtx)
 }

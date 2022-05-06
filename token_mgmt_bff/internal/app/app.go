@@ -9,6 +9,7 @@ import (
 
 	"dxps.io/token_mgmt_bff/internal/domain/logic"
 	"dxps.io/token_mgmt_bff/internal/httpapi"
+	"dxps.io/token_mgmt_bff/internal/infra/repo"
 )
 
 type App struct {
@@ -19,8 +20,12 @@ type App struct {
 func NewApp(httpPort int) (*App, error) {
 
 	// "inline" init for demo purposes
-	txnMgr := logic.NewAccountsMgr()
-	httpAPI := httpapi.NewAPI(httpPort, txnMgr)
+	clientsRepo := repo.NewClientsRepo()
+	tokenFactory := logic.NewTokenFactory(10)
+	authnMgr := logic.NewAuthnMgr(clientsRepo, tokenFactory)
+	authnMgr.StartCleanupJob()
+	accountsMgr := logic.NewAccountsMgr()
+	httpAPI := httpapi.NewAPI(httpPort, authnMgr, accountsMgr)
 	a := App{
 		httpAPI: httpAPI,
 		wg:      nil,
