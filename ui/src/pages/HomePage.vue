@@ -3,35 +3,21 @@
 		<div class="p-14 max-w-full mx-auto mb-auto">
 			<div class="grid gap-1 grid-cols-1 md:grid-cols-4">
 				<div class="max-w-xs">
-					<h3 class="primary pb-8">Money Transfer</h3>
+					<span class="primary pb-8">Money Transfer</span><br />
+					<button class="btn btn-xs btn-outline mr-5" @click="getToken">Get Token</button>
+					<button class="btn btn-xs btn-outline" @click="getAccounts" :disabled="!hasToken">Get Data</button>
 				</div>
 
 				<div class="max-w-3xl col-span-3 mx-auto">
 					<table class="table table-normal table-border">
 						<thead>
 							<tr>
-								<th>account</th>
-								<th>transfer type</th>
-								<th>state</th>
+								<th class="pr-64">account</th>
 							</tr>
 						</thead>
 						<tbody>
 							<tr v-for="account in accounts.data" :key="account.id" class="hover">
 								<td class="primary pr-16">{{ account.name }}</td>
-								<td class="pr-10">
-									<button :disabled="account.is_frozen" class="btn btn-sm btn-outline mr-2">internal</button>
-									<button :disabled="!isExternalTxnAvail" class="btn btn-sm btn-outline">external</button>
-								</td>
-								<td>
-									<div
-										:class="{ 'badge-success': !account.is_frozen, 'bg-red-500': account.is_frozen }"
-										class="badge badge-sm mr-2"
-									></div>
-									<div
-										:class="{ 'badge-success': isExternalTxnAvail, 'bg-red-500': !isExternalTxnAvail }"
-										class="badge badge-sm"
-									></div>
-								</td>
 							</tr>
 						</tbody>
 					</table>
@@ -53,7 +39,7 @@
 						d="M22.672 15.226l-2.432.811.841 2.515c.33 1.019-.209 2.127-1.23 2.456-1.15.325-2.148-.321-2.463-1.226l-.84-2.518-5.013 1.677.84 2.517c.391 1.203-.434 2.542-1.831 2.542-.88 0-1.601-.564-1.86-1.314l-.842-2.516-2.431.809c-1.135.328-2.145-.317-2.463-1.229-.329-1.018.211-2.127 1.231-2.456l2.432-.809-1.621-4.823-2.432.808c-1.355.384-2.558-.59-2.558-1.839 0-.817.509-1.582 1.327-1.846l2.433-.809-.842-2.515c-.33-1.02.211-2.129 1.232-2.458 1.02-.329 2.13.209 2.461 1.229l.842 2.515 5.011-1.677-.839-2.517c-.403-1.238.484-2.553 1.843-2.553.819 0 1.585.509 1.85 1.326l.841 2.517 2.431-.81c1.02-.33 2.131.211 2.461 1.229.332 1.018-.21 2.126-1.23 2.456l-2.433.809 1.622 4.823 2.433-.809c1.242-.401 2.557.484 2.557 1.838 0 .819-.51 1.583-1.328 1.847m-8.992-6.428l-5.01 1.675 1.619 4.828 5.011-1.674-1.62-4.829z"
 					></path>
 				</svg>
-				<p>© 2022 - EDA Summit</p>
+				<p>© 2022 - Security Week @ Signicat</p>
 			</div>
 			<div class="grid-flow-col flex-row flex-auto"></div>
 			<div class="grid-flow-col gap-2 sm:place-self-center sm:justify-self-end">
@@ -87,9 +73,17 @@ import axios from "axios"
 let sseClient
 
 export default {
+	computed: {
+		hasToken() {
+			return this.authn.token.length > 0
+		},
+	},
 	data() {
 		return {
-			bearerToken: "",
+			authn: {
+				token: "",
+				url: "http://localhost:9093/authn",
+			},
 			accounts: {
 				url: "http://localhost:9093/accounts",
 				data: [],
@@ -104,14 +98,25 @@ export default {
 		}
 	},
 	methods: {
-		sseOnMessage(msg) {
-			// console.log(">>> On 'message', got:", msg)
+		async getToken() {
+			const creds = { client_id: "joe", client_secret: "black" }
+			const resp = await axios.post(this.authn.url, creds)
+			this.authn.token = resp.data.token
+			console.log("[getToken] Authn ok, got token", this.authn.token)
+			this.sseConnect()
+		},
 
-			if (msg.startsWith("Payments")) {
-				this.isExternalTxnAvail = msg === "PaymentsDown" ? false : this.isExternalTxnAvail
-				this.isExternalTxnAvail = msg === "PaymentsUp" ? true : this.isExternalTxnAvail
-				return
+		async getAccounts() {
+			if (this.hasToken) {
+				const headers = { Authorization: "Bearer " + this.authn.token }
+				const resp = await axios.post(this.accounts.url, {}, { headers })
+				this.accounts.data = resp.data
 			}
+		},
+
+		sseOnMessage(msg) {
+			console.log("[sseOnMessage]   Got:", msg)
+			this.authn.token = msg
 
 			if (msg.startsWith("AccountDebitDisabled")) {
 				let accountID = msg.substr(21)
@@ -120,18 +125,11 @@ export default {
 					if (account.id === accountID) account.is_frozen = true
 				})
 			}
-
-			if (msg.startsWith("AccountDebitEnabled")) {
-				let accountID = msg.substr(20)
-				console.log(`>>> Account with id="${accountID}" has debit as enabled.`)
-				this.accounts.data.forEach((account) => {
-					if (account.id === accountID) account.is_frozen = false
-				})
-			}
 		},
+
 		sseConnect() {
 			sseClient = this.$sse.create({
-				url: this.sse.url,
+				url: `${this.sse.url}?token=${this.authn.token}`,
 				includeCredentials: this.includeCredentials,
 				format: this.sse.format,
 			})
@@ -140,7 +138,7 @@ export default {
 
 			sseClient.on("error", (e) => {
 				// eslint-disable-line
-				console.log(">>> On 'error', got:", e)
+				console.log("[sseConnect]   Got error:", e)
 				this.sseReconnect()
 			})
 
@@ -148,12 +146,18 @@ export default {
 				.connect() // eslint-disable-line
 				.then(() => {
 					this.sse.isConnected = true
-					console.log(">>> SSE Connection established")
+					console.log("[sseConnect]   SSE Connection established")
 				})
 				.catch((err) => {
 					this.sse.isConnected = false
-					console.log(">>> SSE Connection failed:", err)
+					console.log("[sseConnect]   SSE Connection failed:", err)
 				})
+
+			// Regular checks to keep SSE connection established.
+			clearInterval(this.sse.checkConnTimer) // Just for sanity.
+			this.sse.checkConnTimer = setInterval(() => {
+				this.sseCheckConnection()
+			}, 1000)
 		},
 
 		sseReconnect() {
@@ -177,18 +181,15 @@ export default {
 	},
 
 	async mounted() {
-		if (this.bearerToken.len > 0) {
-			const resp = await axios.get(this.accounts.url)
-			this.accounts.data = resp.data
-		}
+		this.getAccounts()
 
-		this.sseConnect() // Connect to SSE by default.
-
+		// this.sseConnect() // Connect to SSE by default.
 		// Regular checks to keep SSE connection established.
-		this.sse.checkConnTimer = setInterval(() => {
-			this.sseCheckConnection()
-		}, 1000)
+		// this.sse.checkConnTimer = setInterval(() => {
+		//	this.sseCheckConnection()
+		// }, 1000)
 	},
+
 	beforeUnmount() {
 		clearInterval(this.sse.checkConnTimer)
 		this.sseDisconnect()
